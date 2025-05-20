@@ -26,8 +26,9 @@ router = APIRouter(
 )
 
 class OCRSummaryRequest(BaseModel):
-    ollama_url: Optional[str] = None
-    ollama_model: Optional[str] = None
+    base_url: str
+    model: str
+    api_key: str
 
 class OCRSummaryResponse(BaseModel):
     text_image1: str
@@ -50,9 +51,7 @@ async def extract_text_from_image(image_file: UploadFile, debug_info: list) -> (
     debug_info.append(f"Texte extrait: '{text}'")
     return text.strip(), result
 
-async def summarize_with_ollama(text: str, ollama_url: str, ollama_model: str) -> (Any, dict):
-    # Nettoyage automatique de l'URL pour éviter les espaces ou %20 parasites
-    ollama_url = ollama_url.strip().rstrip('/').replace('%20', '')
+async def summarize_with_openai(text: str, base_url: str, model: str, api_key: str) -> (Any, dict):
     prompt = (
         "Voici un texte extrait d'une image de carte d'identité marocaine. "
         "Extrais-moi les informations principales sous forme d'un tableau JSON contenant deux objets : "
@@ -63,16 +62,27 @@ async def summarize_with_ollama(text: str, ollama_url: str, ollama_model: str) -
         f"Texte extrait :\n{text}"
     )
     payload = {
-        "model": ollama_model,
-        "prompt": prompt,
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "Tu es un assistant OCR."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0,
         "stream": False
     }
+    headers = {
+        "Authorization": f"Bearer {api_key}"
+    }
     async with httpx.AsyncClient() as client:
-        response = await client.post(ollama_url, json=payload, timeout=180)
+        response = await client.post(
+            f"{base_url}/v1/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=180
+        )
         response.raise_for_status()
         data = response.json()
-        summary_text = data.get("response") or data.get("summary") or str(data)
-        # Extraction robuste du premier tableau JSON dans la réponse
+        summary_text = data["choices"][0]["message"]["content"]
         match = re.search(r'\[.*\]', summary_text, re.DOTALL)
         if match:
             json_str = match.group(0)
@@ -94,31 +104,7 @@ async def extract_json(
         raise HTTPException(status_code=400, detail="Le fichier doit être une image")
     text1, _ = await extract_text_from_image(image1, debug_info)
     combined = text1
-    ollama_url = config.ollama_url or OLLAMA_URL
-    ollama_model = config.ollama_model or OLLAMA_MODEL
-    summary, _ = await summarize_with_ollama(combined, ollama_url, ollama_model)
-    # Si summary est une string JSON, parser pour garantir un tableau JSON pur
-    if isinstance(summary, str):
-        try:
-            summary = json.loads(summary)
-        except Exception:
-            pass
-    return JSONResponse(content=summary)
-
-@router.post("/justsummary")
-async def just_summary(
-    image1: UploadFile = File(...),
-    config: OCRSummaryRequest = Depends()
-):
-    debug_info = []
-    if not image1.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Le fichier doit être une image")
-    text1, _ = await extract_text_from_image(image1, debug_info)
-    combined = text1
-    ollama_url = (config.ollama_url or OLLAMA_URL).strip()
-    ollama_model = config.ollama_model or OLLAMA_MODEL
-    summary, _ = await summarize_with_ollama(combined, ollama_url, ollama_model)
-    # Si summary est une string JSON, parser pour garantir un tableau JSON pur
+    summary, _ = await summarize_with_openai(combined, config.base_url, config.model, config.api_key)
     if isinstance(summary, str):
         try:
             summary = json.loads(summary)
