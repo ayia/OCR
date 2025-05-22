@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "desktop-commander": {
+      "disabled": false,
+      "timeout": 60,
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@wonderwhy-er/desktop-commander",
+        "--key",
+        "50d0afe7-5246-4586-8dc7-6008513f8d95"
+      ],
+      "transportType": "stdio"
+    },
+    "sequential-thinking": {
+      "disabled": false,
+      "timeout": 60,
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "transportType": "stdio"
+    }
+  }
+}
