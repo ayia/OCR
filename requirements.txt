@@ -1,9 +1,4 @@
 fastapi
 uvicorn
-python-multipart
-pillow
-pytesseract
-pydantic
-paddleocr
-httpx
-ollama 
+requests
+python-multipart 
