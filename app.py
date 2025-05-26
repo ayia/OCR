@@ -31,15 +31,18 @@ def is_allowed_image_magic(data: bytes):
 
 @app.post("/extract-info", summary="Extract and validate information from an identity document image using OCR and return formatted JSON.")
 async def extract_info(
+    prompt_text: str = Form(
+        'Analysez minutieusement l\'image de la Carte Nationale d\'Identité Marocaine et extrayez les informations suivantes avec une précision maximale. Structurez les résultats dans un JSON strictement conforme à ce schéma : { "type": "Carte Nationale d\'Identité Marocaine", // Toujours cette valeur exacte "numero": "U123456", // Format: Lettre majuscule + 6 chiffres "nom": "ENNAJI", // En majuscules, accents autorisés "prenom": "Mehdi", // Format titre, traits d\'union permis "date_naissance": "1995-07-23", // Convertir depuis tout format source "lieu_naissance": "Lyon", // Respecter la casse originale "date_emission": "2022-04-15", // Chercher dans la zone MRZ ou corps du document "date_expiration": "2032-04-15", // Vérifier la cohérence avec la durée de validité "pays": "France", // Le pays d ou la carte a ete emise "langues": ["arabe", "français"] // langues present sur la carte } Directives critiques : 1. Extraction optique : - Analyser séparément zone MRZ, texte imprimé et hologrammes - Vérifier les chiffres de contrôle dans la zone MRZ - Différencier clairement 0/O et 1/I 2. Traitement des dates : - Convertir immédiatement toute date lue en ISO 8601 - Gérer les formats jour/mois/année et année-mois-jour - Pour les dates en lettres (ex: "15 Avril 2022"), convertir en numérique 3. Validation : - Numéro CIN : Valider le pattern [A-Z]\\d{6} - Cohérence temporelle : date_emission < date_expiration - Champs obligatoires : tous sauf \'langues\' si non détectables 4. Gestion d\'erreurs : - Si information illisible : null + commentaire en JSON comment - En cas de contradiction entre zones : priorité MRZ > texte imprimé > hologramme Format de sortie exigé : - JSON minifié sans espaces inutiles - Encodage UTF-8 - Chaînes entre guillemets doubles uniquement - Valeurs null autorisées uniquement pour les champs manquants obligatoires',
+        description="Prompt détaillé pour analyser l'image"
+    ),
     image: UploadFile = File(..., description="Image du document (JPEG, PNG, WEBP, max 10 Mo)")
 ):
-    # Lire la config
+    # Lire la config pour ollama_url et ollama_model
     try:
         with open("config.json", "r", encoding="utf-8") as f:
             config = json.load(f)
         ollama_url = config["ollama_url"]
         ollama_model = config["ollama_model"]
-        prompt_text = config["extract_info_prompt"]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur de lecture du fichier config.json : {str(e)}")
 
