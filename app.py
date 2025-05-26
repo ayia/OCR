@@ -6,7 +6,7 @@ import base64
 import json
 import re
 
-app = FastAPI(title="Ma_CIN_frontçdata API")
+app = FastAPI(title="Document Understanding API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,7 +28,7 @@ def is_allowed_image_magic(data: bytes):
         return 'image/webp'
     return None
 
-@app.post("/Ma_CIN_frontçdata", summary="Envoie une image et un prompt à Ollama et retourne la réponse brute.")
+@app.post("/extract-info", summary="Extract and validate information from an identity document image using OCR and return formatted JSON.")
 async def ma_cin_frontdata(
     ollama_url: str = Form('http://192.168.88.164', description="URL du serveur Ollama (ex: http://localhost:11434)"),
     ollama_model: str = Form('qwen2.5vl:32b', description="Nom du modèle Ollama (ex: llava)"),
@@ -59,7 +59,7 @@ async def ma_cin_frontdata(
         "images": [image_base64],
         "stream": False
     }
-
+    print(f"[LOG] Prompt envoyé à Ollama (/extract-info) : {prompt_text}")
     # 4. Envoyer à Ollama et retourner la réponse brute
     try:
         response = requests.post(f"{ollama_url}/api/generate", json=payload, timeout=30)
@@ -77,6 +77,56 @@ async def ma_cin_frontdata(
             return data
         except Exception:
             # Si le parsing échoue, retourne le texte brut
+            return {"response": raw_response}
+    except requests.exceptions.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Erreur Ollama: {str(e)}")
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Erreur Ollama: {str(e)}")
+
+@app.post("/face-similarity", summary="Analyze two facial images and return a similarity score as JSON.")
+async def face_similarity(
+    ollama_url: str = Form('http://192.168.88.164', description="URL du serveur Ollama (ex: http://localhost:11434)"),
+    ollama_model: str = Form('qwen2.5vl:32b', description="Nom du modèle Ollama (ex: llava)"),
+    prompt_text: str = Form(
+        "Analyze the two provided facial images using computer vision techniques and return the similarity score strictly in the specified JSON format.   - Follow these steps:     1. Preprocess images (align faces, normalize lighting, resize to 512x512).     2. Extract geometric/holistic features (eyes, nose, jawline, symmetry, golden ratios).     3. Calculate similarity using weighted categories: Bone Structure (40%), Proportional Relationships (30%), Soft Tissue (20%), Spatial Alignment (10%).     4. Apply confidence calibration for image quality.   - Return ONLY a valid JSON object with the key `CalculatedSimilarity` and the value as an integer percentage (e.g., {\"CalculatedSimilarity\": 75}).   - Ensure:     - No Markdown, extra text, or formatting.     - Strict adherence to JSON syntax.     - Percentage as an integer (0-100).",
+        description="Prompt for face similarity analysis"
+    ),
+    image1: UploadFile = File(..., description="First facial image (JPEG, PNG, WEBP, max 10 MB)"),
+    image2: UploadFile = File(..., description="Second facial image (JPEG, PNG, WEBP, max 10 MB)")
+):
+    # Validation et lecture des deux images
+    images_data = []
+    for img in (image1, image2):
+        data = await img.read()
+        if len(data) > MAX_IMAGE_SIZE:
+            raise HTTPException(status_code=413, detail="La taille d'une des images dépasse 10 Mo")
+        mime_type = is_allowed_image_magic(data)
+        if not mime_type:
+            raise HTTPException(status_code=400, detail="Format d'image non supporté (JPEG, PNG, WEBP)")
+        images_data.append(base64.b64encode(data).decode('utf-8'))
+
+    # Préparer la requête pour Ollama
+    payload = {
+        "model": ollama_model,
+        "prompt": prompt_text,
+        "images": images_data,
+        "stream": False
+    }
+    print(f"[LOG] Prompt envoyé à Ollama (/face-similarity) : {prompt_text}")
+    try:
+        response = requests.post(f"{ollama_url}/api/generate", json=payload, timeout=30)
+        response.raise_for_status()
+        ollama_json = response.json()
+        raw_response = ollama_json.get('response', '')
+        match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw_response)
+        if match:
+            json_str = match.group(1).strip()
+        else:
+            json_str = raw_response.strip()
+        try:
+            data = json.loads(json_str)
+            return data
+        except Exception:
             return {"response": raw_response}
     except requests.exceptions.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Erreur Ollama: {str(e)}")
