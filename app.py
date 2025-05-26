@@ -5,6 +5,7 @@ import requests
 import base64
 import json
 import re
+import os
 
 app = FastAPI(title="Document Understanding API")
 
@@ -85,15 +86,19 @@ async def ma_cin_frontdata(
 
 @app.post("/face-similarity", summary="Analyze two facial images and return a similarity score as JSON.")
 async def face_similarity(
-    ollama_url: str = Form('http://192.168.88.164', description="URL du serveur Ollama (ex: http://localhost:11434)"),
-    ollama_model: str = Form('qwen2.5vl:32b', description="Nom du modèle Ollama (ex: llava)"),
-    prompt_text: str = Form(
-        "Analyze the two provided facial images using computer vision techniques and return the similarity score strictly in the specified JSON format.   - Follow these steps:     1. Preprocess images (align faces, normalize lighting, resize to 512x512).     2. Extract geometric/holistic features (eyes, nose, jawline, symmetry, golden ratios).     3. Calculate similarity using weighted categories: Bone Structure (40%), Proportional Relationships (30%), Soft Tissue (20%), Spatial Alignment (10%).     4. Apply confidence calibration for image quality.   - Return ONLY a valid JSON object with the key `CalculatedSimilarity` and the value as an integer percentage (e.g., {\"CalculatedSimilarity\": 75}).   - Ensure:     - No Markdown, extra text, or formatting.     - Strict adherence to JSON syntax.     - Percentage as an integer (0-100).",
-        description="Prompt for face similarity analysis"
-    ),
     image1: UploadFile = File(..., description="First facial image (JPEG, PNG, WEBP, max 10 MB)"),
     image2: UploadFile = File(..., description="Second facial image (JPEG, PNG, WEBP, max 10 MB)")
 ):
+    # Lire la config
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            config = json.load(f)
+        ollama_url = config["ollama_url"]
+        ollama_model = config["ollama_model"]
+        prompt_text = config["prompt_text"]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur de lecture du fichier config.json : {str(e)}")
+
     # Validation et lecture des deux images
     images_data = []
     for img in (image1, image2):
