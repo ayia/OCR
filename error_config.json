@@ -1,0 +1,34 @@
+{
+  "language": "fr",
+  "log_errors": true,
+  "log_destination": "file",
+  "log_file_path": "logs/app.log",
+  "log_level": "INFO",
+  "show_trace": false,
+  "messages": {
+    "ValidationError": {
+      "fr": "Erreur de validation des données.",
+      "en": "Data validation error."
+    },
+    "ImageTooLarge": {
+      "fr": "La taille du fichier dépasse 10 Mo.",
+      "en": "File size exceeds 10 MB."
+    },
+    "UnsupportedImageFormat": {
+      "fr": "Format d'image non supporté (JPEG, PNG, WEBP).",
+      "en": "Unsupported image format (JPEG, PNG, WEBP)."
+    },
+    "OllamaError": {
+      "fr": "Erreur lors de la communication avec Ollama.",
+      "en": "Error communicating with Ollama."
+    },
+    "ConfigError": {
+      "fr": "Erreur de configuration du serveur.",
+      "en": "Server configuration error."
+    },
+    "InternalError": {
+      "fr": "Erreur interne du serveur.",
+      "en": "Internal server error."
+    }
+  }
+} 

@@ -1,0 +1,1 @@
+2025-05-26 11:28:13,348 ERROR [OllamaError] 413 Client Error: Request Entity Too Large for url: http://192.168.88.164/api/generate trace_id=b2cc3834-01be-4abd-9758-868a89cf7506

@@ -1,7 +1,8 @@
 import base64
 import json
 import re
-from fastapi import APIRouter, File, Form, UploadFile, HTTPException
+from fastapi import APIRouter, File, Form, UploadFile
+from error_handlers import ValidationError, ImageTooLarge, UnsupportedImageFormat, OllamaError, ConfigError
 
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 Mo
 
@@ -19,14 +20,14 @@ class VisionAnalyticsController:
     async def extract_info(prompt_text: str, image: UploadFile, ollama_url: str, ollama_model: str):
         image_data = await image.read()
         if len(image_data) > MAX_IMAGE_SIZE:
-            raise HTTPException(status_code=413, detail="La taille du fichier dépasse 10 Mo")
+            raise ImageTooLarge()
         mime_type = is_allowed_image_magic(image_data)
         if not mime_type:
-            raise HTTPException(status_code=400, detail="Format d'image non supporté (JPEG, PNG, WEBP)")
+            raise UnsupportedImageFormat()
         try:
             image_base64 = base64.b64encode(image_data).decode('utf-8')
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erreur d'encodage de l'image: {str(e)}")
+            raise ValidationError(details=f"Erreur d'encodage de l'image: {str(e)}")
         payload = {
             "model": ollama_model,
             "prompt": prompt_text,
@@ -51,9 +52,9 @@ class VisionAnalyticsController:
             except Exception:
                 return {"response": raw_response}
         except requests.exceptions.HTTPError as e:
-            raise HTTPException(status_code=502, detail=f"Erreur Ollama: {str(e)}")
+            raise OllamaError(details=f"{str(e)}")
         except requests.exceptions.RequestException as e:
-            raise HTTPException(status_code=502, detail=f"Erreur Ollama: {str(e)}")
+            raise OllamaError(details=f"{str(e)}")
 
     @staticmethod
     async def face_similarity(image1: UploadFile, image2: UploadFile, ollama_url: str, ollama_model: str, prompt_text: str):
@@ -61,10 +62,10 @@ class VisionAnalyticsController:
         for img in (image1, image2):
             data = await img.read()
             if len(data) > MAX_IMAGE_SIZE:
-                raise HTTPException(status_code=413, detail="La taille d'une des images dépasse 10 Mo")
+                raise ImageTooLarge()
             mime_type = is_allowed_image_magic(data)
             if not mime_type:
-                raise HTTPException(status_code=400, detail="Format d'image non supporté (JPEG, PNG, WEBP)")
+                raise UnsupportedImageFormat()
             images_data.append(base64.b64encode(data).decode('utf-8'))
         payload = {
             "model": ollama_model,
@@ -90,9 +91,9 @@ class VisionAnalyticsController:
             except Exception:
                 return {"response": raw_response}
         except requests.exceptions.HTTPError as e:
-            raise HTTPException(status_code=502, detail=f"Erreur Ollama: {str(e)}")
+            raise OllamaError(details=f"{str(e)}")
         except requests.exceptions.RequestException as e:
-            raise HTTPException(status_code=502, detail=f"Erreur Ollama: {str(e)}")
+            raise OllamaError(details=f"{str(e)}")
 
 router = APIRouter(prefix="/vision_analytics", tags=["Vision Analytics"])
 
@@ -110,7 +111,7 @@ async def extract_info(
         ollama_url = config["ollama_url"]
         ollama_model = config["ollama_model"]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur de lecture du fichier config.json : {str(e)}")
+        raise ConfigError(details=str(e))
     return await VisionAnalyticsController.extract_info(prompt_text, image, ollama_url, ollama_model)
 
 @router.post("/face-similarity", summary="Analyze two facial images and return a similarity score as JSON.")
@@ -125,5 +126,5 @@ async def face_similarity(
         ollama_model = config["ollama_model"]
         prompt_text = config["face_similarity_prompt"]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur de lecture du fichier config.json : {str(e)}")
+        raise ConfigError(details=str(e))
     return await VisionAnalyticsController.face_similarity(image1, image2, ollama_url, ollama_model, prompt_text) 
